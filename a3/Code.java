@@ -16,8 +16,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
 	private int renderingProgram;
 	private int vao[] = new int[1];
-	private int vbo[] = new int[5];
-//	private Vector3f torusLoc = new Vector3f(0,0,-1);
+	private int vbo[] = new int[8];
 	private Vector3f cameraLoc = new Vector3f(0,0,1.5f);
 
 	// ---------------------- Camera ----------------------
@@ -39,7 +38,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private Matrix4f vMat = new Matrix4f();  // view matrix
 	private Matrix4f mMat = new Matrix4f();  // model matrix
 	private Matrix4f invTrMat = new Matrix4f(); // inverse-transpose
-	private int mLoc, vLoc, pLoc, nLoc;
+	private int mLoc, vLoc, pLoc, nLoc, sampLoc;
 	private int globalAmbLoc, ambLoc, diffLoc, specLoc, posLoc, mambLoc, mdiffLoc, mspecLoc, mshiLoc;
 	private float aspect;
 	private Vector3f currentLightPos = new Vector3f();
@@ -89,6 +88,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		setSize(800, 800);
 		myCanvas = new GLCanvas();
 		myCanvas.addGLEventListener(this);
+		myCanvas.addKeyListener(this);
 		this.add(myCanvas);
 		this.setVisible(true);
 		Animator animator = new Animator(myCanvas);
@@ -107,6 +107,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		vLoc = gl.glGetUniformLocation(renderingProgram, "v_matrix");
 		pLoc = gl.glGetUniformLocation(renderingProgram, "p_matrix");
 		nLoc = gl.glGetUniformLocation(renderingProgram, "norm_matrix");
+		sampLoc = gl.glGetUniformLocation(renderingProgram, "samp");
 
 //		Old Torus Code
 //		mMat.translation(torusLoc.x(), torusLoc.y(), torusLoc.z());
@@ -119,7 +120,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		prevTime = currentTime;
 
 		// Light Position
-		lightRotationAngle = (float)(elapsedTime * 0.001);
+		lightRotationAngle = (float)(elapsedTime * 0.1);
 		currentLightPos.set(initialLightLoc);
 		currentLightPos.rotateAxis((float)Math.toRadians(lightRotationAngle), 0.0f, 0.0f, 1.0f);
 
@@ -146,7 +147,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		// Send matrices to shaders
 		gl.glUniformMatrix4fv(mLoc, 1, false, mvStack.get(vals));
 		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
-//		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
 		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
 
 		// Ground Vertices
@@ -168,7 +168,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glActiveTexture(GL_TEXTURE0);
 		gl.glBindTexture(GL_TEXTURE_2D, groundTexture);
 
-		int sampLoc = gl.glGetUniformLocation(renderingProgram, "samp");
 		gl.glUniform1i(sampLoc, 0);
 
 
@@ -179,9 +178,45 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		mvStack.popMatrix();
 
-		// --------------------------------------------
+		// ---------------------- Car ----------------------
+		mvStack.pushMatrix();
+		mvStack.translate(0.0f, 0.175f, 0.0f).scale(0.0015f).rotateY((float) Math.toRadians(90.0f));
+
+		mMat.set(mvStack);
+		mMat.invert(invTrMat);
+		invTrMat.transpose(invTrMat);
+
+		// Send matrices to shaders
+		gl.glUniformMatrix4fv(mLoc, 1, false, mvStack.get(vals));
+		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
+
+		// Car Vertices
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[5]);
+		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(0);
+
+		// Car Texture
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[6]);
+		gl.glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(1);
+
+		// Car normals
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[7]);
+		gl.glVertexAttribPointer(2, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(2);
+
+		// Binding Texture
+		gl.glActiveTexture(GL_TEXTURE0);
+		gl.glBindTexture(GL_TEXTURE_2D, carTexture);
+
+		// Render
+		gl.glEnable(GL_DEPTH_TEST);
+		gl.glDrawArrays(GL_TRIANGLES, 0, myModel.getNumVertices());
 		mvStack.popMatrix();
 
+		// --------------------------------------------
+		mvStack.popMatrix();
 
 // 		Torus Old Code
 //		gl.glEnable(GL_CULL_FACE);
@@ -195,6 +230,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	public void init(GLAutoDrawable drawable)
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
+		myModel = new ImportedModel("car.obj");
+
 		renderingProgram = Utils.createShaderProgram("a3/vertShader.glsl", "a3/fragShader.glsl");
 
 		startTime = System.currentTimeMillis();
@@ -208,8 +245,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		cameraX = 0.0f;
 		cameraY = 2.0f;
 		cameraZ = 10.0f;
-
-		myModel = new ImportedModel("car.obj");
 
 		carTexture = Utils.loadTexture("car.png");
 		groundTexture = Utils.loadTexture("ground.jpg");
@@ -250,30 +285,31 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	private void setupVertices()
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
-	
-		myTorus = new Torus(0.5f, 0.2f, 48);
-		numTorusVertices = myTorus.getNumVertices();
-		numTorusIndices = myTorus.getNumIndices();
-	
-		Vector3f[] vertices = myTorus.getVertices();
-		Vector2f[] texCoords = myTorus.getTexCoords();
-		Vector3f[] normals = myTorus.getNormals();
-		int[] indices = myTorus.getIndices();
-		
-		float[] pvalues = new float[vertices.length*3];
-		float[] tvalues = new float[texCoords.length*2];
-		float[] nvalues = new float[normals.length*3];
 
-		for (int i=0; i<numTorusVertices; i++)
-		{	pvalues[i*3]   = (float) vertices[i].x();
-			pvalues[i*3+1] = (float) vertices[i].y();
-			pvalues[i*3+2] = (float) vertices[i].z();
-			tvalues[i*2]   = (float) texCoords[i].x();
-			tvalues[i*2+1] = (float) texCoords[i].y();
-			nvalues[i*3]   = (float) normals[i].x();
-			nvalues[i*3+1] = (float) normals[i].y();
-			nvalues[i*3+2] = (float) normals[i].z();
-		}
+		// ---------------------- Torus ----------------------
+//		myTorus = new Torus(0.5f, 0.2f, 48);
+//		numTorusVertices = myTorus.getNumVertices();
+//		numTorusIndices = myTorus.getNumIndices();
+//
+//		Vector3f[] vertices = myTorus.getVertices();
+//		Vector2f[] texCoords = myTorus.getTexCoords();
+//		Vector3f[] normals = myTorus.getNormals();
+//		int[] indices = myTorus.getIndices();
+//
+//		float[] pvalues = new float[vertices.length*3];
+//		float[] tvalues = new float[texCoords.length*2];
+//		float[] nvalues = new float[normals.length*3];
+//
+//		for (int i=0; i<numTorusVertices; i++)
+//		{	pvalues[i*3]   = (float) vertices[i].x();
+//			pvalues[i*3+1] = (float) vertices[i].y();
+//			pvalues[i*3+2] = (float) vertices[i].z();
+//			tvalues[i*2]   = (float) texCoords[i].x();
+//			tvalues[i*2+1] = (float) texCoords[i].y();
+//			nvalues[i*3]   = (float) normals[i].x();
+//			nvalues[i*3+1] = (float) normals[i].y();
+//			nvalues[i*3+2] = (float) normals[i].z();
+//		}
 
 		// ---------------------- Axis Lines ----------------------
 		float[] axisVertices = {
@@ -335,6 +371,27 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 						0.0f, 1.0f, 0.0f
 				};
 
+		// ---------------------- Car ----------------------
+		numObjVertices = myModel.getNumVertices();
+		Vector3f[] vertices = myModel.getVertices();
+		Vector2f[] texCoords = myModel.getTexCoords();
+		Vector3f[] normals = myModel.getNormals();
+
+		float[] pvalues = new float[numObjVertices * 3];
+		float[] tvalues = new float[numObjVertices * 2];
+		float[] nvalues = new float[numObjVertices * 3];
+
+		for (int i = 0; i < numObjVertices; i++) {
+			pvalues[i * 3] = (float) (vertices[i]).x();
+			pvalues[i * 3 + 1] = (float) (vertices[i]).y();
+			pvalues[i * 3 + 2] = (float) (vertices[i]).z();
+			tvalues[i * 2] = (float) (texCoords[i]).x();
+			tvalues[i * 2 + 1] = (float) (texCoords[i]).y();
+			nvalues[i * 3] = (float) (normals[i]).x();
+			nvalues[i * 3 + 1] = (float) (normals[i]).y();
+			nvalues[i * 3 + 2] = (float) (normals[i]).z();
+		}
+
 		// --------------------------------------------
 		gl.glGenVertexArrays(vao.length, vao, 0);
 		gl.glBindVertexArray(vao[0]);
@@ -378,6 +435,21 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[4]);
 		FloatBuffer axisTexBuf = Buffers.newDirectFloatBuffer(axisTexCoords);
 		gl.glBufferData(GL_ARRAY_BUFFER, axisTexBuf.limit() * 4, axisTexBuf, GL_STATIC_DRAW);
+
+		// ---------------------- Car ----------------------
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[5]);
+		FloatBuffer vertBuf = Buffers.newDirectFloatBuffer(pvalues);
+		gl.glBufferData(GL_ARRAY_BUFFER, vertBuf.limit() * 4, vertBuf, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[6]);
+		FloatBuffer texBuf = Buffers.newDirectFloatBuffer(tvalues);
+		gl.glBufferData(GL_ARRAY_BUFFER, texBuf.limit() * 4, texBuf, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[7]);
+		FloatBuffer norBuf = Buffers.newDirectFloatBuffer(nvalues);
+		gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit() * 4, norBuf, GL_STATIC_DRAW);
+
+
 	}
 
 	@Override
