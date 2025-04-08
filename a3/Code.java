@@ -1,5 +1,7 @@
 package a3;
 
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.nio.*;
 import javax.swing.*;
 import java.lang.Math;
@@ -10,21 +12,26 @@ import com.jogamp.opengl.awt.GLCanvas;
 import com.jogamp.common.nio.Buffers;
 import org.joml.*;
 
-public class Code extends JFrame implements GLEventListener
+public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
 	private int renderingProgram;
 	private int vao[] = new int[1];
-	private int vbo[] = new int[4];
-	private Vector3f torusLoc = new Vector3f(0,0,-1);
-	private Vector3f cameraLoc = new Vector3f(0,0,1);
-	
-	private Torus myTorus;
-	private int numTorusVertices, numTorusIndices;
+	private int vbo[] = new int[5];
+//	private Vector3f torusLoc = new Vector3f(0,0,-1);
+	private Vector3f cameraLoc = new Vector3f(0,0,1.5f);
 
-	private Vector3f initialLightLoc = new Vector3f(5.0f, 2.0f, 2.0f);
-	private double prevTime;
-	private double elapsedTime;
-	private float amt = 0.0f;
+	// ---------------------- Camera ----------------------
+	private float cameraPitch = 0.0f;
+	private float cameraYaw = 0.0f;
+	private float cameraX, cameraY, cameraZ;
+
+	// ---------------------- TIME ----------------------
+	private double startTime = 0;
+	private double prevTime = 0;
+	private double deltaTime = 0;
+	private double elapsedTime = 0;
+	private double currentTime = 0;
+	// ----------------------  ----------------------
 	
 	// allocate variables for display() function
 	private FloatBuffer vals = Buffers.newDirectFloatBuffer(16);
@@ -38,6 +45,11 @@ public class Code extends JFrame implements GLEventListener
 	private Vector3f currentLightPos = new Vector3f();
 	private float[] lightPos = new float[3];
 
+	// ---------------------- LIGHTING ----------------------
+	private Vector3f initialLightLoc = new Vector3f(5.0f, 2.0f, 2.0f);
+
+	float lightRotationAngle = 0;
+
 	// white light properties
 	float[] globalAmbient = new float[] { 0.6f, 0.6f, 0.6f, 1.0f };
 	float[] lightAmbient = new float[] { 0.1f, 0.1f, 0.1f, 1.0f };
@@ -49,9 +61,31 @@ public class Code extends JFrame implements GLEventListener
 	float[] matDif = Utils.goldDiffuse();
 	float[] matSpe = Utils.goldSpecular();
 	float matShi = Utils.goldShininess();
+	// ----------------------  ----------------------
+
+	// ---------------------- Models and Textures ----------------------
+	private int carTexture;
+	private int groundTexture;
+	private int axisTexture;
+
+	private int numObjVertices;
+	private ImportedModel myModel;
+
+	// Torus
+	private Torus myTorus;
+	private int numTorusVertices, numTorusIndices;
+
+	// Axes
+	private boolean visibleAxis = true;
+	private float axesX = 0.0f;
+
+	// ----------------------  ----------------------
+
+	private Matrix4fStack mvStack = new Matrix4fStack(16);
+
 
 	public Code()
-	{	setTitle("Chapter7 - program 2");
+	{	setTitle("Lab 3");
 		setSize(800, 800);
 		myCanvas = new GLCanvas();
 		myCanvas.addGLEventListener(this);
@@ -68,59 +102,122 @@ public class Code extends JFrame implements GLEventListener
 
 		gl.glUseProgram(renderingProgram);
 
+		// Uniform Variables
 		mLoc = gl.glGetUniformLocation(renderingProgram, "m_matrix");
 		vLoc = gl.glGetUniformLocation(renderingProgram, "v_matrix");
 		pLoc = gl.glGetUniformLocation(renderingProgram, "p_matrix");
 		nLoc = gl.glGetUniformLocation(renderingProgram, "norm_matrix");
-		
-		vMat.translation(-cameraLoc.x(), -cameraLoc.y(), -cameraLoc.z());
-		
-		mMat.translation(torusLoc.x(), torusLoc.y(), torusLoc.z());
-		mMat.rotateX((float)Math.toRadians(35.0f));
-		
+
+//		Old Torus Code
+//		mMat.translation(torusLoc.x(), torusLoc.y(), torusLoc.z());
+//		mMat.rotateX((float)Math.toRadians(35.0f));
+
+		// Time Values
+		currentTime = System.currentTimeMillis();
+		elapsedTime = currentTime - startTime;
+		deltaTime = (currentTime - prevTime) / 1000;
+		prevTime = currentTime;
+
+		// Light Position
+		lightRotationAngle = (float)(elapsedTime * 0.001);
 		currentLightPos.set(initialLightLoc);
-		elapsedTime = System.currentTimeMillis() - prevTime;
-		prevTime = System.currentTimeMillis();
-		amt += elapsedTime * 0.03f;
-		currentLightPos.rotateAxis((float)Math.toRadians(amt), 0.0f, 0.0f, 1.0f);
-		
+		currentLightPos.rotateAxis((float)Math.toRadians(lightRotationAngle), 0.0f, 0.0f, 1.0f);
+
+		// Camera stuff
+		vMat.identity();
+		vMat.translation(-cameraX, -cameraY, -cameraZ);
+
+		// Pass perspective matrix to shader
+		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+
+		mvStack.pushMatrix();
+
+		// update lights
 		installLights();
 
+		// ---------------------- Ground ----------------------
+		mvStack.pushMatrix();
+		mvStack.translate(0.0f, 0.0f, 0.0f);
+
+		mMat.set(mvStack);
 		mMat.invert(invTrMat);
 		invTrMat.transpose(invTrMat);
 
-		gl.glUniformMatrix4fv(mLoc, 1, false, mMat.get(vals));
+		// Send matrices to shaders
+		gl.glUniformMatrix4fv(mLoc, 1, false, mvStack.get(vals));
 		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
-		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+//		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
 		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
 
+		// Ground Vertices
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
 		gl.glEnableVertexAttribArray(0);
 
-		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-		gl.glVertexAttribPointer(1, 3, GL_FLOAT, false, 0, 0);
+		// Ground Textures
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+		gl.glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
 		gl.glEnableVertexAttribArray(1);
 
-		gl.glEnable(GL_CULL_FACE);
-		gl.glFrontFace(GL_CCW);
+		// Ground normals
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+		gl.glVertexAttribPointer(2, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(2);
+
+		// Binding Texture
+		gl.glActiveTexture(GL_TEXTURE0);
+		gl.glBindTexture(GL_TEXTURE_2D, groundTexture);
+
+		int sampLoc = gl.glGetUniformLocation(renderingProgram, "samp");
+		gl.glUniform1i(sampLoc, 0);
+
+
 		gl.glEnable(GL_DEPTH_TEST);
 		gl.glDepthFunc(GL_LEQUAL);
 
-		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-		gl.glDrawElements(GL_TRIANGLES, numTorusIndices, GL_UNSIGNED_INT, 0);
+		gl.glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		mvStack.popMatrix();
+
+		// --------------------------------------------
+		mvStack.popMatrix();
+
+
+// 		Torus Old Code
+//		gl.glEnable(GL_CULL_FACE);
+//		gl.glFrontFace(GL_CCW);
+//		gl.glEnable(GL_DEPTH_TEST);
+//		gl.glDepthFunc(GL_LEQUAL);
+
+//		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
+//		gl.glDrawElements(GL_TRIANGLES, numTorusIndices, GL_UNSIGNED_INT, 0);
 	}
 
 	public void init(GLAutoDrawable drawable)
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
 		renderingProgram = Utils.createShaderProgram("a3/vertShader.glsl", "a3/fragShader.glsl");
 
-		prevTime = System.currentTimeMillis();
+		startTime = System.currentTimeMillis();
+		prevTime = startTime;
 
 		aspect = (float) myCanvas.getWidth() / (float) myCanvas.getHeight();
 		pMat.setPerspective((float) Math.toRadians(60.0f), aspect, 0.1f, 1000.0f);
 
 		setupVertices();
+
+		cameraX = 0.0f;
+		cameraY = 2.0f;
+		cameraZ = 10.0f;
+
+		myModel = new ImportedModel("car.obj");
+
+		carTexture = Utils.loadTexture("car.png");
+		groundTexture = Utils.loadTexture("ground.jpg");
+		axisTexture = Utils.loadTexture("axis.png");
+
+		gl.glBindTexture(GL_TEXTURE_2D, groundTexture);
+		gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	}
 	
 	private void installLights()
@@ -177,26 +274,160 @@ public class Code extends JFrame implements GLEventListener
 			nvalues[i*3+1] = (float) normals[i].y();
 			nvalues[i*3+2] = (float) normals[i].z();
 		}
-		
+
+		// ---------------------- Axis Lines ----------------------
+		float[] axisVertices = {
+				// X
+				0.0f, 0.0f, 0.0f,
+				1.0f, 0.0f, 0.0f,
+
+				// Y
+				0.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f,
+
+				// Z
+				0.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f
+		};
+
+		float[] axisTexCoords = {
+				// X
+				1.0f, 0.0f,
+				1.0f, 0.0f,
+
+				// Y
+				0.0f, 1.0f,
+				0.0f, 1.0f,
+
+				// Z
+				0.0f, 0.0f,
+				0.0f, 0.0f
+		};
+
+		// ---------------------- Ground ----------------------
+		float[] groundVertices =
+				{
+						-5.0f, 0.0f, -5.0f,  // Bottom-left
+						5.0f, 0.0f, -5.0f,  // Bottom-right
+						-5.0f, 0.0f,  5.0f,  // Top-left
+						5.0f, 0.0f, -5.0f,  // Bottom-right
+						5.0f, 0.0f,  5.0f,  // Top-right
+						-5.0f, 0.0f,  5.0f   // Top-left
+				};
+
+		float[] groundTexCoords =
+				{
+						0.0f, 0.0f,  // Bottom-left
+						5.0f, 0.0f,  // Bottom-right
+						0.0f, 5.0f,  // Top-left
+						5.0f, 0.0f,  // Bottom-right
+						5.0f, 5.0f,  // Top-right
+						0.0f, 5.0f   // Top-left
+				};
+
+		float[] groundNormals =
+				{
+						0.0f, 1.0f, 0.0f,
+						0.0f, 1.0f, 0.0f,
+						0.0f, 1.0f, 0.0f,
+						0.0f, 1.0f, 0.0f,
+						0.0f, 1.0f, 0.0f,
+						0.0f, 1.0f, 0.0f
+				};
+
+		// --------------------------------------------
 		gl.glGenVertexArrays(vao.length, vao, 0);
 		gl.glBindVertexArray(vao[0]);
-		gl.glGenBuffers(4, vbo, 0);
-		
+		gl.glGenBuffers(vbo.length, vbo, 0);
+
+		// ---------------------- Torus ----------------------
+//		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+//		FloatBuffer vertBuf = Buffers.newDirectFloatBuffer(pvalues);
+//		gl.glBufferData(GL_ARRAY_BUFFER, vertBuf.limit()*4, vertBuf, GL_STATIC_DRAW);
+//
+//		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+//		FloatBuffer texBuf = Buffers.newDirectFloatBuffer(tvalues);
+//		gl.glBufferData(GL_ARRAY_BUFFER, texBuf.limit()*4, texBuf, GL_STATIC_DRAW);
+//
+//		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+//		FloatBuffer norBuf = Buffers.newDirectFloatBuffer(nvalues);
+//		gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit()*4, norBuf, GL_STATIC_DRAW);
+//
+//		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
+//		IntBuffer idxBuf = Buffers.newDirectIntBuffer(indices);
+//		gl.glBufferData(GL_ELEMENT_ARRAY_BUFFER, idxBuf.limit()*4, idxBuf, GL_STATIC_DRAW);
+
+		// ---------------------- Ground ----------------------
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-		FloatBuffer vertBuf = Buffers.newDirectFloatBuffer(pvalues);
-		gl.glBufferData(GL_ARRAY_BUFFER, vertBuf.limit()*4, vertBuf, GL_STATIC_DRAW);
+		FloatBuffer groundBuf = Buffers.newDirectFloatBuffer(groundVertices);
+		gl.glBufferData(GL_ARRAY_BUFFER, groundBuf.limit() * 4, groundBuf, GL_STATIC_DRAW);
 
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-		FloatBuffer texBuf = Buffers.newDirectFloatBuffer(tvalues);
-		gl.glBufferData(GL_ARRAY_BUFFER, texBuf.limit()*4, texBuf, GL_STATIC_DRAW);
+		FloatBuffer groundTex = Buffers.newDirectFloatBuffer(groundTexCoords);
+		gl.glBufferData(GL_ARRAY_BUFFER, groundTex.limit() * 4, groundTex, GL_STATIC_DRAW);
 
-		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-		FloatBuffer norBuf = Buffers.newDirectFloatBuffer(nvalues);
-		gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit()*4, norBuf, GL_STATIC_DRAW);
-		
-		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-		IntBuffer idxBuf = Buffers.newDirectIntBuffer(indices);
-		gl.glBufferData(GL_ELEMENT_ARRAY_BUFFER, idxBuf.limit()*4, idxBuf, GL_STATIC_DRAW);
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);  // Use an unused VBO slot
+		FloatBuffer groundNor = Buffers.newDirectFloatBuffer(groundNormals);
+		gl.glBufferData(GL_ARRAY_BUFFER, groundNor.limit() * 4, groundNor, GL_STATIC_DRAW);
+
+		// ---------------------- Axis Lines ----------------------
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[3]);
+		FloatBuffer axisVertBuf = Buffers.newDirectFloatBuffer(axisVertices);
+		gl.glBufferData(GL_ARRAY_BUFFER, axisVertBuf.limit() * 4, axisVertBuf, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[4]);
+		FloatBuffer axisTexBuf = Buffers.newDirectFloatBuffer(axisTexCoords);
+		gl.glBufferData(GL_ARRAY_BUFFER, axisTexBuf.limit() * 4, axisTexBuf, GL_STATIC_DRAW);
+	}
+
+	@Override
+	public void keyTyped(KeyEvent e) {
+
+	}
+
+	@Override
+	public void keyPressed(KeyEvent e) {
+		float speed = 5f;
+		float cameraSpeed = 0.05f;
+		switch (e.getKeyCode()) {
+			case KeyEvent.VK_W:
+				cameraZ -= (float)(speed * deltaTime);
+				break;
+			case KeyEvent.VK_A:
+				cameraX -= (float)(speed * deltaTime);
+				break;
+			case KeyEvent.VK_S:
+				cameraZ += (float)(speed * deltaTime);
+				break;
+			case KeyEvent.VK_D:
+				cameraX += (float)(speed * deltaTime);
+				break;
+			case KeyEvent.VK_UP:
+				cameraPitch -= cameraSpeed;
+				break;
+			case KeyEvent.VK_DOWN:
+				cameraPitch += cameraSpeed;
+				break;
+			case KeyEvent.VK_LEFT:
+				cameraYaw -= cameraSpeed;
+				break;
+			case KeyEvent.VK_RIGHT:
+				cameraYaw += cameraSpeed;
+				break;
+			case KeyEvent.VK_SPACE:
+				if (visibleAxis) {
+					axesX += 10f;
+				} else {
+					axesX -= 10f;
+				}
+				visibleAxis = !visibleAxis;
+				break;
+		}
+	}
+
+	@Override
+	public void keyReleased(KeyEvent e) {
+
 	}
 
 	public static void main(String[] args) { new Code(); }
@@ -205,4 +436,5 @@ public class Code extends JFrame implements GLEventListener
 	{	aspect = (float) myCanvas.getWidth() / (float) myCanvas.getHeight();
 		pMat.setPerspective((float) Math.toRadians(60.0f), aspect, 0.1f, 1000.0f);
 	}
+
 }
