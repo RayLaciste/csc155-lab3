@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="vecmath">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/../../../../../javagaming/vecmath/vecmath.jar!/" />
+      <root url="jar://$PROJECT_DIR$/../../../../../javagaming/joml/joml-1.10.7.jar!/" />
+      <root url="jar://$PROJECT_DIR$/../../../../../javagaming/jogl/jogamp-fat.jar!/" />
+      <root url="jar://$PROJECT_DIR$/../../../../../javagaming/jinput/jinput.jar!/" />
+      <root url="jar://$PROJECT_DIR$/../../../../../javagaming/jinput/jinput-2.0.9-natives-all.jar!/" />
+      <root url="jar://$PROJECT_DIR$/../../../../../javagaming/jbullet/jbullet.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
