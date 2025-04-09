@@ -16,7 +16,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
 	private int renderingProgram;
 	private int vao[] = new int[1];
-	private int vbo[] = new int[8];
+	private int vbo[] = new int[11];
 	private Vector3f cameraLoc = new Vector3f(0,0,1.5f);
 
 	// ---------------------- Camera ----------------------
@@ -51,9 +51,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	// white light properties
 	float[] globalAmbient = new float[] { 0.6f, 0.6f, 0.6f, 1.0f };
-	float[] lightAmbient = new float[] { 0.1f, 0.1f, 0.1f, 1.0f };
-	float[] lightDiffuse = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
-	float[] lightSpecular = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+	float[] lightAmbient = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
+	float[] lightDiffuse = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
+	float[] lightSpecular = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
 		
 	// gold material
 	float[] matAmb = Utils.goldAmbient();
@@ -71,15 +71,12 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private int numObjVerticesUfo, numObjVerticesCow;
 	private ImportedModel ufoModel, cowModel;
 
-	// Torus
-	private Torus myTorus;
-	private int numTorusVertices, numTorusIndices;
-
 	// Axes
 	private boolean visibleAxis = true;
 	private float axesX = 0.0f;
 
 	// ufo
+	private float ufoPositionY = 1.5f;
 	private float ufoPositionZ = 0.0f;
 	private float ufoMovementSpeed = 0.5f;
 	private float ufoWave = .75f;  // How wide the sine wave is
@@ -126,9 +123,10 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		prevTime = currentTime;
 
 		// Light Position
-		lightRotationAngle = (float)(elapsedTime * 0.05);
-		currentLightPos.set(initialLightLoc);
-		currentLightPos.rotateAxis((float)Math.toRadians(lightRotationAngle), 0.0f, 0.0f, 1.0f);
+//		lightRotationAngle = (float)(elapsedTime * 0.05);
+//		currentLightPos.set(initialLightLoc);
+//		currentLightPos.rotateAxis((float)Math.toRadians(lightRotationAngle), 0.0f, 0.0f, 1.0f);
+		currentLightPos.set(0.0f, ufoPositionY - 0.1f, ufoPositionZ);
 
 		// Camera stuff
 		vMat.identity();
@@ -187,9 +185,11 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		// ---------------------- Ufo ----------------------
 		mvStack.pushMatrix();
 
-		ufoPositionZ = (float) Math.sin(elapsedTime * 0.001f * ufoMovementSpeed) * ufoWave;
+//		ufoPositionZ = (float) Math.sin(elapsedTime * 0.001f * ufoMovementSpeed) * ufoWave;
 
-		mvStack.translate(0, 1.5f, 0)
+		ufoPositionZ = 0;
+
+		mvStack.translate(0, ufoPositionY, ufoPositionZ)
 				.scale(0.5f)
 				.rotateY((float) Math.toRadians(90.0f));
 
@@ -226,17 +226,47 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDrawArrays(GL_TRIANGLES, 0, ufoModel.getNumVertices());
 		mvStack.popMatrix();
 
+		// ---------------------- Cow ----------------------
+		mvStack.pushMatrix();
+
+		mvStack.translate(0, 0, 0).scale(0.05f).rotateY((float) Math.toRadians(-90.0f));
+
+		mMat.set(mvStack);
+		mMat.invert(invTrMat);
+		invTrMat.transpose(invTrMat);
+
+		// Send matrices to shaders
+		gl.glUniformMatrix4fv(mLoc, 1, false, mvStack.get(vals));
+		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
+
+		// Cow Vertices
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[8]);
+		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(0);
+
+		// Cow Texture
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[9]);
+		gl.glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(1);
+
+		// Cow normals
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[10]);
+		gl.glVertexAttribPointer(2, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(2);
+
+		// Binding Texture
+		gl.glActiveTexture(GL_TEXTURE0);
+		gl.glBindTexture(GL_TEXTURE_2D, cowTexture);
+
+		// Render
+		gl.glEnable(GL_DEPTH_TEST);
+		gl.glDrawArrays(GL_TRIANGLES, 0, cowModel.getNumVertices());
+		mvStack.popMatrix();
+
 		// --------------------------------------------
 		mvStack.popMatrix();
 
-// 		Torus Old Code
-//		gl.glEnable(GL_CULL_FACE);
-//		gl.glFrontFace(GL_CCW);
-//		gl.glEnable(GL_DEPTH_TEST);
-//		gl.glDepthFunc(GL_LEQUAL);
-
-//		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-//		gl.glDrawElements(GL_TRIANGLES, numTorusIndices, GL_UNSIGNED_INT, 0);
 	}
 
 	public void init(GLAutoDrawable drawable)
@@ -299,31 +329,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	private void setupVertices()
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
-
-		// ---------------------- Torus ----------------------
-//		myTorus = new Torus(0.5f, 0.2f, 48);
-//		numTorusVertices = myTorus.getNumVertices();
-//		numTorusIndices = myTorus.getNumIndices();
-//
-//		Vector3f[] vertices = myTorus.getVertices();
-//		Vector2f[] texCoords = myTorus.getTexCoords();
-//		Vector3f[] normals = myTorus.getNormals();
-//		int[] indices = myTorus.getIndices();
-//
-//		float[] pvalues = new float[vertices.length*3];
-//		float[] tvalues = new float[texCoords.length*2];
-//		float[] nvalues = new float[normals.length*3];
-//
-//		for (int i=0; i<numTorusVertices; i++)
-//		{	pvalues[i*3]   = (float) vertices[i].x();
-//			pvalues[i*3+1] = (float) vertices[i].y();
-//			pvalues[i*3+2] = (float) vertices[i].z();
-//			tvalues[i*2]   = (float) texCoords[i].x();
-//			tvalues[i*2+1] = (float) texCoords[i].y();
-//			nvalues[i*3]   = (float) normals[i].x();
-//			nvalues[i*3+1] = (float) normals[i].y();
-//			nvalues[i*3+2] = (float) normals[i].z();
-//		}
 
 		// ---------------------- Axis Lines ----------------------
 		float[] axisVertices = {
@@ -412,42 +417,25 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		Vector2f[] cowtexCoords = cowModel.getTexCoords();
 		Vector3f[] cownormals = cowModel.getNormals();
 
-		float[] pvalues = new float[numObjVerticesCow * 3];
-		float[] tvalues = new float[numObjVerticesCow * 2];
-		float[] nvalues = new float[numObjVerticesCow * 3];
+		float[] pvaluescow = new float[numObjVerticesCow * 3];
+		float[] tvaluescow = new float[numObjVerticesCow * 2];
+		float[] nvaluescow = new float[numObjVerticesCow * 3];
 
 		for (int i = 0; i < numObjVerticesCow; i++) {
-			pvalues[i * 3] = (float) (cowvertices[i]).x();
-			pvalues[i * 3 + 1] = (float) (cowvertices[i]).y();
-			pvalues[i * 3 + 2] = (float) (cowvertices[i]).z();
-			tvalues[i * 2] = (float) (cowtexCoords[i]).x();
-			tvalues[i * 2 + 1] = (float) (cowtexCoords[i]).y();
-			nvalues[i * 3] = (float) (cownormals[i]).x();
-			nvalues[i * 3 + 1] = (float) (cownormals[i]).y();
-			nvalues[i * 3 + 2] = (float) (cownormals[i]).z();
+			pvaluescow[i * 3] = (float) (cowvertices[i]).x();
+			pvaluescow[i * 3 + 1] = (float) (cowvertices[i]).y();
+			pvaluescow[i * 3 + 2] = (float) (cowvertices[i]).z();
+			tvaluescow[i * 2] = (float) (cowtexCoords[i]).x();
+			tvaluescow[i * 2 + 1] = (float) (cowtexCoords[i]).y();
+			nvaluescow[i * 3] = (float) (cownormals[i]).x();
+			nvaluescow[i * 3 + 1] = (float) (cownormals[i]).y();
+			nvaluescow[i * 3 + 2] = (float) (cownormals[i]).z();
 		}
 
 		// --------------------------------------------
 		gl.glGenVertexArrays(vao.length, vao, 0);
 		gl.glBindVertexArray(vao[0]);
 		gl.glGenBuffers(vbo.length, vbo, 0);
-
-		// ---------------------- Torus ----------------------
-//		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-//		FloatBuffer vertBuf = Buffers.newDirectFloatBuffer(pvalues);
-//		gl.glBufferData(GL_ARRAY_BUFFER, vertBuf.limit()*4, vertBuf, GL_STATIC_DRAW);
-//
-//		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-//		FloatBuffer texBuf = Buffers.newDirectFloatBuffer(tvalues);
-//		gl.glBufferData(GL_ARRAY_BUFFER, texBuf.limit()*4, texBuf, GL_STATIC_DRAW);
-//
-//		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-//		FloatBuffer norBuf = Buffers.newDirectFloatBuffer(nvalues);
-//		gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit()*4, norBuf, GL_STATIC_DRAW);
-//
-//		gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-//		IntBuffer idxBuf = Buffers.newDirectIntBuffer(indices);
-//		gl.glBufferData(GL_ELEMENT_ARRAY_BUFFER, idxBuf.limit()*4, idxBuf, GL_STATIC_DRAW);
 
 		// ---------------------- Ground ----------------------
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
@@ -471,7 +459,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		FloatBuffer axisTexBuf = Buffers.newDirectFloatBuffer(axisTexCoords);
 		gl.glBufferData(GL_ARRAY_BUFFER, axisTexBuf.limit() * 4, axisTexBuf, GL_STATIC_DRAW);
 
-		// ---------------------- Car ----------------------
+		// ---------------------- Ufo ----------------------
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[5]);
 		FloatBuffer vertBuf = Buffers.newDirectFloatBuffer(pvaluesufo);
 		gl.glBufferData(GL_ARRAY_BUFFER, vertBuf.limit() * 4, vertBuf, GL_STATIC_DRAW);
@@ -483,6 +471,19 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[7]);
 		FloatBuffer norBuf = Buffers.newDirectFloatBuffer(nvaluesufo);
 		gl.glBufferData(GL_ARRAY_BUFFER, norBuf.limit() * 4, norBuf, GL_STATIC_DRAW);
+
+		// ---------------------- Cow ----------------------
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[8]);
+		FloatBuffer vertBufCow = Buffers.newDirectFloatBuffer(pvaluescow);
+		gl.glBufferData(GL_ARRAY_BUFFER, vertBufCow.limit() * 4, vertBufCow, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[9]);
+		FloatBuffer texBufCow = Buffers.newDirectFloatBuffer(tvaluescow);
+		gl.glBufferData(GL_ARRAY_BUFFER, texBufCow.limit() * 4, texBufCow, GL_STATIC_DRAW);
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[10]);
+		FloatBuffer norBufCow = Buffers.newDirectFloatBuffer(nvaluescow);
+		gl.glBufferData(GL_ARRAY_BUFFER, norBufCow.limit() * 4, norBufCow, GL_STATIC_DRAW);
 
 
 	}
