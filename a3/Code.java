@@ -14,9 +14,9 @@ import org.joml.*;
 
 public class Code extends JFrame implements GLEventListener, KeyListener
 {	private GLCanvas myCanvas;
-	private int renderingProgram;
+	private int renderingProgram, renderingProgramCubeMap;
 	private int vao[] = new int[1];
-	private int vbo[] = new int[11];
+	private int vbo[] = new int[12];
 	private Vector3f cameraLoc = new Vector3f(0,0,1.5f);
 
 	// ---------------------- Camera ----------------------
@@ -45,12 +45,10 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private float[] lightPos = new float[3];
 
 	// ---------------------- LIGHTING ----------------------
-	private Vector3f initialLightLoc = new Vector3f(5.0f, 2.0f, 2.0f);
-
 	float lightRotationAngle = 0;
 
 	// white light properties
-	float[] globalAmbient = new float[] { 0.6f, 0.6f, 0.6f, 1.0f };
+	float[] globalAmbient = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
 	float[] lightAmbient = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
 	float[] lightDiffuse = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
 	float[] lightSpecular = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
@@ -67,6 +65,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private int cowTexture;
 	private int groundTexture;
 	private int axisTexture;
+	private int skyboxTexture;
 
 	private int numObjVerticesUfo, numObjVerticesCow;
 	private ImportedModel ufoModel, cowModel;
@@ -100,8 +99,34 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	public void display(GLAutoDrawable drawable)
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
+		gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Black background
 		gl.glClear(GL_COLOR_BUFFER_BIT);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
+
+		vMat.identity();
+		vMat.translation(-cameraX, -cameraY, -cameraZ);
+
+		// draw cube map
+		gl.glUseProgram(renderingProgramCubeMap);
+
+		int vLocCubeMap = gl.glGetUniformLocation(renderingProgramCubeMap, "v_matrix");
+		gl.glUniformMatrix4fv(vLocCubeMap, 1, false, vMat.get(vals));
+		int pLocCubeMap = gl.glGetUniformLocation(renderingProgramCubeMap, "p_matrix");
+		gl.glUniformMatrix4fv(pLocCubeMap, 1, false, pMat.get(vals));
+
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
+		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+		gl.glEnableVertexAttribArray(0);
+
+		gl.glActiveTexture(GL_TEXTURE0);
+		gl.glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
+
+		gl.glEnable(GL_CULL_FACE);
+		gl.glFrontFace(GL_CCW);	     // cube is CW, but we are viewing the inside
+		gl.glDisable(GL_DEPTH_TEST);
+		gl.glDrawArrays(GL_TRIANGLES, 0, 36);
+		gl.glEnable(GL_DEPTH_TEST);
+
 
 		gl.glUseProgram(renderingProgram);
 
@@ -111,10 +136,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		pLoc = gl.glGetUniformLocation(renderingProgram, "p_matrix");
 		nLoc = gl.glGetUniformLocation(renderingProgram, "norm_matrix");
 		sampLoc = gl.glGetUniformLocation(renderingProgram, "samp");
-
-//		Old Torus Code
-//		mMat.translation(torusLoc.x(), torusLoc.y(), torusLoc.z());
-//		mMat.rotateX((float)Math.toRadians(35.0f));
 
 		// Time Values
 		currentTime = System.currentTimeMillis();
@@ -173,7 +194,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glBindTexture(GL_TEXTURE_2D, groundTexture);
 
 		gl.glUniform1i(sampLoc, 0);
-
 
 		gl.glEnable(GL_DEPTH_TEST);
 		gl.glDepthFunc(GL_LEQUAL);
@@ -276,6 +296,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		cowModel = new ImportedModel("cow.obj");
 
 		renderingProgram = Utils.createShaderProgram("a3/vertShader.glsl", "a3/fragShader.glsl");
+		renderingProgramCubeMap = Utils.createShaderProgram("a3/vertCShader.glsl", "a3/fragCShader.glsl");
 
 		startTime = System.currentTimeMillis();
 		prevTime = startTime;
@@ -293,7 +314,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		cowTexture = Utils.loadTexture("cow.png");
 		groundTexture = Utils.loadTexture("ground.jpg");
 		axisTexture = Utils.loadTexture("axis.png");
+		skyboxTexture = Utils.loadCubeMap("cubeMap");
 
+		gl.glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 		gl.glBindTexture(GL_TEXTURE_2D, groundTexture);
 		gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -329,6 +352,21 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	private void setupVertices()
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
+
+		float[] cubeVertexPositions =
+				{	-1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f,
+						1.0f, -1.0f, -1.0f, 1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+						1.0f, -1.0f, -1.0f, 1.0f, -1.0f,  1.0f, 1.0f,  1.0f, -1.0f,
+						1.0f, -1.0f,  1.0f, 1.0f,  1.0f,  1.0f, 1.0f,  1.0f, -1.0f,
+						1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f, 1.0f,  1.0f,  1.0f,
+						-1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f, 1.0f,  1.0f,  1.0f,
+						-1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f,
+						-1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,  1.0f,
+						-1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
+						1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,
+						-1.0f,  1.0f, -1.0f, 1.0f,  1.0f, -1.0f, 1.0f,  1.0f,  1.0f,
+						1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f
+				};
 
 		// ---------------------- Axis Lines ----------------------
 		float[] axisVertices = {
@@ -484,6 +522,11 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[10]);
 		FloatBuffer norBufCow = Buffers.newDirectFloatBuffer(nvaluescow);
 		gl.glBufferData(GL_ARRAY_BUFFER, norBufCow.limit() * 4, norBufCow, GL_STATIC_DRAW);
+
+		// ---------------------- Cube ----------------------
+		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[11]);
+		FloatBuffer cvertBuf = Buffers.newDirectFloatBuffer(cubeVertexPositions);
+		gl.glBufferData(GL_ARRAY_BUFFER, cvertBuf.limit()*4, cvertBuf, GL_STATIC_DRAW);
 
 
 	}
