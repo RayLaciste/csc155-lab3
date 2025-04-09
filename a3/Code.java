@@ -17,12 +17,11 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private int renderingProgram, renderingProgramCubeMap;
 	private int vao[] = new int[1];
 	private int vbo[] = new int[12];
-	private Vector3f cameraLoc = new Vector3f(0,0,1.5f);
+	private Vector3f cameraLoc = new Vector3f(0,1.75f,5f);
 
 	// ---------------------- Camera ----------------------
 	private float cameraPitch = 0.0f;
 	private float cameraYaw = 0.0f;
-	private float cameraX, cameraY, cameraZ;
 
 	// ---------------------- TIME ----------------------
 	private double startTime = 0;
@@ -49,10 +48,13 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	// white light properties
 	float[] globalAmbient = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
-	float[] lightAmbient = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
-	float[] lightDiffuse = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
-	float[] lightSpecular = new float[] { 0.0f, 1.0f, 0.0f, 1.0f };
-		
+//	float[] lightAmbient = new float[] { 0.1f, 0.1f, 0.1f, 1.0f };
+//	float[] lightDiffuse = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+//	float[] lightSpecular = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+	float[] lightAmbient = new float[] { 0.0f, 0.1f, 0.0f, 1.0f };
+	float[] lightDiffuse = new float[] { 0.25f, 1.0f, 0.25f, 1.0f };
+	float[] lightSpecular = new float[] { 0.25f, 1.0f, 0.25f, 1.0f };
+
 	// gold material
 	float[] matAmb = Utils.goldAmbient();
 	float[] matDif = Utils.goldDiffuse();
@@ -75,10 +77,18 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private float axesX = 0.0f;
 
 	// ufo
+	private float ufoPositionX = 0.0f;
 	private float ufoPositionY = 1.5f;
 	private float ufoPositionZ = 0.0f;
 	private float ufoMovementSpeed = 0.5f;
-	private float ufoWave = .75f;  // How wide the sine wave is
+	private float ufoRotationSpeed = 35.0f;
+	private float ufoRotationY = 0.0f;
+	private float ufoWave = 2.0f;
+
+	// cow rotation angles
+	private float cowRotationX = 0.0f;
+	private float cowRotationY = 0.0f;
+	private float cowRotationSpeed = 50.0f;
 
 	// ----------------------  ----------------------
 
@@ -103,11 +113,17 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glClear(GL_COLOR_BUFFER_BIT);
 		gl.glClear(GL_DEPTH_BUFFER_BIT);
 
-		vMat.identity();
-		vMat.translation(-cameraX, -cameraY, -cameraZ);
+		gl.glEnable(GL_DEPTH_TEST);
+		gl.glDepthFunc(GL_LEQUAL);
 
-		// draw cube map
+		// Camera Stuff
+		vMat.identity();
+		vMat.translation(-cameraLoc.x, -cameraLoc.y, -cameraLoc.z);
+
+		// ---------------------- Skybox ----------------------
 		gl.glUseProgram(renderingProgramCubeMap);
+
+		gl.glDepthMask(false);
 
 		int vLocCubeMap = gl.glGetUniformLocation(renderingProgramCubeMap, "v_matrix");
 		gl.glUniformMatrix4fv(vLocCubeMap, 1, false, vMat.get(vals));
@@ -123,11 +139,12 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		gl.glEnable(GL_CULL_FACE);
 		gl.glFrontFace(GL_CCW);	     // cube is CW, but we are viewing the inside
-		gl.glDisable(GL_DEPTH_TEST);
 		gl.glDrawArrays(GL_TRIANGLES, 0, 36);
-		gl.glEnable(GL_DEPTH_TEST);
 
+		gl.glDepthMask(true);
+		gl.glDepthFunc(GL_LESS);
 
+		// ---------------------- Scene ----------------------
 		gl.glUseProgram(renderingProgram);
 
 		// Uniform Variables
@@ -137,41 +154,26 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		nLoc = gl.glGetUniformLocation(renderingProgram, "norm_matrix");
 		sampLoc = gl.glGetUniformLocation(renderingProgram, "samp");
 
+		// Pass perspective matrix to shader
+		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
+		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+
 		// Time Values
 		currentTime = System.currentTimeMillis();
 		elapsedTime = currentTime - startTime;
 		deltaTime = (currentTime - prevTime) / 1000;
 		prevTime = currentTime;
 
-		// Light Position
-//		lightRotationAngle = (float)(elapsedTime * 0.05);
-//		currentLightPos.set(initialLightLoc);
-//		currentLightPos.rotateAxis((float)Math.toRadians(lightRotationAngle), 0.0f, 0.0f, 1.0f);
-		currentLightPos.set(0.0f, ufoPositionY - 0.1f, ufoPositionZ);
-
-		// Camera stuff
-		vMat.identity();
-		vMat.translation(-cameraX, -cameraY, -cameraZ);
-
-		// Pass perspective matrix to shader
-		gl.glUniformMatrix4fv(pLoc, 1, false, pMat.get(vals));
-
-		mvStack.pushMatrix();
-
-		// update lights
-		installLights();
-
 		// ---------------------- Ground ----------------------
-		mvStack.pushMatrix();
-		mvStack.translate(0.0f, 0.0f, 0.0f);
+		gl.glDisable(GL_CULL_FACE);
 
-		mMat.set(mvStack);
-		mMat.invert(invTrMat);
+		Matrix4f groundMat = new Matrix4f();
+		groundMat.identity().translate(0.0f, 0.0f, 0.0f);
+
+		groundMat.invert(invTrMat);
 		invTrMat.transpose(invTrMat);
 
-		// Send matrices to shaders
-		gl.glUniformMatrix4fv(mLoc, 1, false, mvStack.get(vals));
-		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
+		gl.glUniformMatrix4fv(mLoc, 1, false, groundMat.get(vals));
 		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
 
 		// Ground Vertices
@@ -192,26 +194,33 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		// Binding Texture
 		gl.glActiveTexture(GL_TEXTURE0);
 		gl.glBindTexture(GL_TEXTURE_2D, groundTexture);
-
 		gl.glUniform1i(sampLoc, 0);
 
-		gl.glEnable(GL_DEPTH_TEST);
-		gl.glDepthFunc(GL_LEQUAL);
-
 		gl.glDrawArrays(GL_TRIANGLES, 0, 6);
+		gl.glEnable(GL_CULL_FACE);  // Re-enable if needed
 
-		mvStack.popMatrix();
+		// ---------------------- Scene (MV STACK + VARIABLES) ----------------------
+
+		ufoPositionX = (float) Math.sin(elapsedTime * 0.001f * ufoMovementSpeed) * ufoWave;
+
+		cowRotationX += cowRotationSpeed * deltaTime;
+		cowRotationY += cowRotationSpeed * deltaTime;
+
+		ufoRotationY += ufoRotationSpeed * deltaTime;
+
+		// Light Position
+		currentLightPos.set(ufoPositionX, ufoPositionY, ufoPositionZ);
+
+		installLights();
+
+		mvStack.pushMatrix();
 
 		// ---------------------- Ufo ----------------------
 		mvStack.pushMatrix();
 
-//		ufoPositionZ = (float) Math.sin(elapsedTime * 0.001f * ufoMovementSpeed) * ufoWave;
-
-		ufoPositionZ = 0;
-
-		mvStack.translate(0, ufoPositionY, ufoPositionZ)
+		mvStack.translate(ufoPositionX, ufoPositionY, ufoPositionZ)
 				.scale(0.5f)
-				.rotateY((float) Math.toRadians(90.0f));
+				.rotateY((float) Math.toRadians(ufoRotationY));
 
 		mMat.set(mvStack);
 		mMat.invert(invTrMat);
@@ -240,16 +249,18 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		// Binding Texture
 		gl.glActiveTexture(GL_TEXTURE0);
 		gl.glBindTexture(GL_TEXTURE_2D, ufoTexture);
+		gl.glUniform1i(sampLoc, 0);
 
 		// Render
-		gl.glEnable(GL_DEPTH_TEST);
 		gl.glDrawArrays(GL_TRIANGLES, 0, ufoModel.getNumVertices());
-		mvStack.popMatrix();
-
 		// ---------------------- Cow ----------------------
 		mvStack.pushMatrix();
 
-		mvStack.translate(0, 0, 0).scale(0.05f).rotateY((float) Math.toRadians(-90.0f));
+		mvStack.translate(0, -0.75f, 0)
+				.scale(0.05f)
+				.rotateX((float) Math.toRadians(cowRotationX))
+				.rotateY((float) Math.toRadians(cowRotationY))
+				.rotateY((float) Math.toRadians(-90.0f));
 
 		mMat.set(mvStack);
 		mMat.invert(invTrMat);
@@ -278,15 +289,17 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		// Binding Texture
 		gl.glActiveTexture(GL_TEXTURE0);
 		gl.glBindTexture(GL_TEXTURE_2D, cowTexture);
+		gl.glUniform1i(sampLoc, 0);
 
 		// Render
-		gl.glEnable(GL_DEPTH_TEST);
 		gl.glDrawArrays(GL_TRIANGLES, 0, cowModel.getNumVertices());
 		mvStack.popMatrix();
 
 		// --------------------------------------------
 		mvStack.popMatrix();
-
+		mvStack.popMatrix();
+		// --------------------------------------------
+		gl.glDisable(GL_CULL_FACE);
 	}
 
 	public void init(GLAutoDrawable drawable)
@@ -305,10 +318,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		pMat.setPerspective((float) Math.toRadians(60.0f), aspect, 0.1f, 1000.0f);
 
 		setupVertices();
-
-		cameraX = 0.0f;
-		cameraY = 1.5f;
-		cameraZ = 5.0f;
 
 		ufoTexture = Utils.loadTexture("ufo.png");
 		cowTexture = Utils.loadTexture("cow.png");
@@ -400,22 +409,22 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		// ---------------------- Ground ----------------------
 		float[] groundVertices =
 				{
-						-5.0f, 0.0f, -5.0f,  // Bottom-left
-						5.0f, 0.0f, -5.0f,  // Bottom-right
-						-5.0f, 0.0f,  5.0f,  // Top-left
-						5.0f, 0.0f, -5.0f,  // Bottom-right
-						5.0f, 0.0f,  5.0f,  // Top-right
-						-5.0f, 0.0f,  5.0f   // Top-left
+						-10.0f, 0.0f, -10.0f,  // Bottom-left
+						10.0f, 0.0f, -10.0f,  // Bottom-right
+						-10.0f, 0.0f,  10.0f,  // Top-left
+						10.0f, 0.0f, -10.0f,  // Bottom-right
+						10.0f, 0.0f,  10.0f,  // Top-right
+						-10.0f, 0.0f,  10.0f   // Top-left
 				};
 
 		float[] groundTexCoords =
 				{
 						0.0f, 0.0f,  // Bottom-left
-						5.0f, 0.0f,  // Bottom-right
-						0.0f, 5.0f,  // Top-left
-						5.0f, 0.0f,  // Bottom-right
-						5.0f, 5.0f,  // Top-right
-						0.0f, 5.0f   // Top-left
+						10.0f, 0.0f,  // Bottom-right
+						0.0f, 10.0f,  // Top-left
+						10.0f, 0.0f,  // Bottom-right
+						10.0f, 10.0f,  // Top-right
+						0.0f, 10.0f   // Top-left
 				};
 
 		float[] groundNormals =
@@ -541,30 +550,6 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		float speed = 5f;
 		float cameraSpeed = 0.05f;
 		switch (e.getKeyCode()) {
-			case KeyEvent.VK_W:
-				cameraZ -= (float)(speed * deltaTime);
-				break;
-			case KeyEvent.VK_A:
-				cameraX -= (float)(speed * deltaTime);
-				break;
-			case KeyEvent.VK_S:
-				cameraZ += (float)(speed * deltaTime);
-				break;
-			case KeyEvent.VK_D:
-				cameraX += (float)(speed * deltaTime);
-				break;
-			case KeyEvent.VK_UP:
-				cameraPitch -= cameraSpeed;
-				break;
-			case KeyEvent.VK_DOWN:
-				cameraPitch += cameraSpeed;
-				break;
-			case KeyEvent.VK_LEFT:
-				cameraYaw -= cameraSpeed;
-				break;
-			case KeyEvent.VK_RIGHT:
-				cameraYaw += cameraSpeed;
-				break;
 			case KeyEvent.VK_SPACE:
 				if (visibleAxis) {
 					axesX += 10f;
