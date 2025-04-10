@@ -199,9 +199,31 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDrawArrays(GL_TRIANGLES, 0, 6);
 		gl.glEnable(GL_CULL_FACE);  // Re-enable if needed
 
+		// ---------------------- Axes ----------------------
+		if (visibleAxis) {
+			Matrix4f axesMat = new Matrix4f();
+			axesMat.identity().translate(0.0f, 0.0f, 0.0f);
+
+			gl.glUniformMatrix4fv(mLoc, 1, false, axesMat.get(vals));
+
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[3]);
+			gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(0);
+
+			gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[4]);
+			gl.glVertexAttribPointer(1, 2, GL_FLOAT, false, 0, 0);
+			gl.glEnableVertexAttribArray(1);
+
+			gl.glActiveTexture(GL_TEXTURE0);
+			gl.glBindTexture(GL_TEXTURE_2D, axisTexture);
+
+			gl.glLineWidth(2.0f);
+			gl.glDrawArrays(GL_LINES, 0, 6);
+		}
+
 		// ---------------------- Scene (MV STACK + VARIABLES) ----------------------
 
-		ufoPositionX = (float) Math.sin(elapsedTime * 0.001f * ufoMovementSpeed) * ufoWave;
+//		ufoPositionX = (float) Math.sin(elapsedTime * 0.001f * ufoMovementSpeed) * ufoWave;
 
 		cowRotationX += cowRotationSpeed * deltaTime;
 		cowRotationY += cowRotationSpeed * deltaTime;
@@ -547,7 +569,7 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	@Override
 	public void keyPressed(KeyEvent e) {
-		float speed = 5f;
+		float speed = 0.25f;
 		float cameraSpeed = 0.05f;
 		switch (e.getKeyCode()) {
 			case KeyEvent.VK_SPACE:
@@ -557,6 +579,18 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 					axesX -= 10f;
 				}
 				visibleAxis = !visibleAxis;
+				break;
+			case KeyEvent.VK_UP:
+				ufoPositionZ -= speed; // Move forward (negative Z)
+				break;
+			case KeyEvent.VK_DOWN:
+				ufoPositionZ += speed; // Move backward (positive Z)
+				break;
+			case KeyEvent.VK_LEFT:
+				ufoPositionX -= speed; // Move left (negative X)
+				break;
+			case KeyEvent.VK_RIGHT:
+				ufoPositionX += speed; // Move right (positive X)
 				break;
 		}
 	}
