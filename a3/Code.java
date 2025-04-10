@@ -17,6 +17,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	private int renderingProgram, renderingProgramCubeMap;
 	private int vao[] = new int[1];
 	private int vbo[] = new int[12];
+
+	private Camera camera;
 	private Vector3f cameraLoc = new Vector3f(0,1.75f,5f);
 
 	// ---------------------- Camera ----------------------
@@ -117,8 +119,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glDepthFunc(GL_LEQUAL);
 
 		// Camera Stuff
-		vMat.identity();
-		vMat.translation(-cameraLoc.x, -cameraLoc.y, -cameraLoc.z);
+//		vMat.identity();
+//		vMat.translation(-cameraLoc.x, -cameraLoc.y, -cameraLoc.z);
 
 		// ---------------------- Skybox ----------------------
 		gl.glUseProgram(renderingProgramCubeMap);
@@ -163,6 +165,9 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		elapsedTime = currentTime - startTime;
 		deltaTime = (currentTime - prevTime) / 1000;
 		prevTime = currentTime;
+
+		camera.updateViewMatrix();
+		vMat = camera.getViewMatrix();
 
 		// ---------------------- Ground ----------------------
 		gl.glDisable(GL_CULL_FACE);
@@ -326,6 +331,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	public void init(GLAutoDrawable drawable)
 	{	GL4 gl = (GL4) GLContext.getCurrentGL();
+
+		camera = new Camera();
 
 		ufoModel = new ImportedModel("ufo.obj");
 		cowModel = new ImportedModel("cow.obj");
@@ -569,8 +576,8 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 	@Override
 	public void keyPressed(KeyEvent e) {
-		float speed = 0.25f;
-		float cameraSpeed = 0.05f;
+		float speed = 0.1f;
+
 		switch (e.getKeyCode()) {
 			case KeyEvent.VK_SPACE:
 				if (visibleAxis) {
@@ -580,17 +587,22 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 				}
 				visibleAxis = !visibleAxis;
 				break;
-			case KeyEvent.VK_UP:
+			case KeyEvent.VK_I :
 				ufoPositionZ -= speed; // Move forward (negative Z)
 				break;
-			case KeyEvent.VK_DOWN:
+			case KeyEvent.VK_K:
 				ufoPositionZ += speed; // Move backward (positive Z)
 				break;
-			case KeyEvent.VK_LEFT:
+			case KeyEvent.VK_J:
 				ufoPositionX -= speed; // Move left (negative X)
 				break;
-			case KeyEvent.VK_RIGHT:
+			case KeyEvent.VK_L:
 				ufoPositionX += speed; // Move right (positive X)
+				break;
+
+			default:
+				// camera controls: W, A, S, D, Q, E, and arrow keys
+				camera.handleKeyInput(e.getKeyCode(), (float) deltaTime);
 				break;
 		}
 	}
