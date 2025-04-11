@@ -57,11 +57,18 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 	float[] lightDiffuse = new float[] { 0.25f, 1.0f, 0.25f, 1.0f };
 	float[] lightSpecular = new float[] { 0.25f, 1.0f, 0.25f, 1.0f };
 
-	// gold material
-	float[] matAmb = Utils.goldAmbient();
-	float[] matDif = Utils.goldDiffuse();
-	float[] matSpe = Utils.goldSpecular();
-	float matShi = Utils.goldShininess();
+	// Silver material
+	float[] matAmb = Utils.silverAmbient();
+	float[] matDif = Utils.silverDiffuse();
+	float[] matSpe = Utils.silverSpecular();
+	float matShi = Utils.silverShininess();
+
+	// custom cow hide material
+	float[] cowMatAmb = Utils.cowAmbient();  // or Utils.spottedCowAmbient()
+	float[] cowMatDif = Utils.cowDiffuse();  // or Utils.spottedCowDiffuse()
+	float[] cowMatSpe = Utils.cowSpecular(); // or Utils.spottedCowSpecular()
+	float cowMatShi = Utils.cowShininess();  // or Utils.spottedCowShininess()
+
 	// ----------------------  ----------------------
 
 	// ---------------------- Models and Textures ----------------------
@@ -298,6 +305,12 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 		gl.glUniformMatrix4fv(vLoc, 1, false, vMat.get(vals));
 		gl.glUniformMatrix4fv(nLoc, 1, false, invTrMat.get(vals));
 
+		// Set material
+		gl.glProgramUniform4fv(renderingProgram, mambLoc, 1, cowMatAmb, 0);
+		gl.glProgramUniform4fv(renderingProgram, mdiffLoc, 1, cowMatDif, 0);
+		gl.glProgramUniform4fv(renderingProgram, mspecLoc, 1, cowMatSpe, 0);
+		gl.glProgramUniform1f(renderingProgram, mshiLoc, cowMatShi);
+
 		// Cow Vertices
 		gl.glBindBuffer(GL_ARRAY_BUFFER, vbo[8]);
 		gl.glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
@@ -320,6 +333,13 @@ public class Code extends JFrame implements GLEventListener, KeyListener
 
 		// Render
 		gl.glDrawArrays(GL_TRIANGLES, 0, cowModel.getNumVertices());
+
+		// Reseting material
+		gl.glProgramUniform4fv(renderingProgram, mambLoc, 1, matAmb, 0);
+		gl.glProgramUniform4fv(renderingProgram, mdiffLoc, 1, matDif, 0);
+		gl.glProgramUniform4fv(renderingProgram, mspecLoc, 1, matSpe, 0);
+		gl.glProgramUniform1f(renderingProgram, mshiLoc, matShi);
+
 		mvStack.popMatrix();
 
 		// --------------------------------------------

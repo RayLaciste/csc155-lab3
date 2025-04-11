@@ -376,10 +376,16 @@ public class Utils
 	public static float[] silverSpecular() { return (new float [] {0.5083f,  0.5083f,  0.5083f, 1} ); }
 	public static float silverShininess()  { return 51.2f; }
 
-
 	// BRONZE material - ambient, diffuse, specular, and shininess
 	public static float[] bronzeAmbient()  { return (new float [] {0.2125f,  0.1275f, 0.0540f, 1} ); }
 	public static float[] bronzeDiffuse()  { return (new float [] {0.7140f,  0.4284f, 0.1814f, 1} ); }
 	public static float[] bronzeSpecular() { return (new float [] {0.3936f,  0.2719f, 0.1667f, 1} ); }
 	public static float bronzeShininess()  { return 25.6f; }
+
+	// CUSTOM COW MATERIAL
+	public static float[] cowAmbient()  { return (new float [] {0.2f, 0.15f, 0.1f, 1} ); }
+	public static float[] cowDiffuse()  { return (new float [] {0.8f, 0.6f, 0.4f, 1} ); }
+	public static float[] cowSpecular() { return (new float [] {0.10f, 0.08f, 0.04f, 1} ); }
+	public static float cowShininess()  { return 5.0f; }
+
 }
